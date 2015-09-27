@@ -1,0 +1,91 @@
+---
+title: "Machine Learning - Course Project"
+author: "Michael Michonski"
+date: "September 26, 2015"
+output: 
+  html_document:
+    keep_md: true
+---
+
+##Executive Summary  
+The following analysis contains the process of building a model to predict correct and incorrect movements in weightlifting using Groupware's Human Activity Recognition dataset.
+
+  
+  
+  
+##Data Cleaning  
+
+
+To load the data:
+
+```{r}
+setwd("/Users/rossc/Downloads")
+weight.training <- read.csv(file="pml-training.csv", na.strings = c("NA", "N/A", "#DIV/0!"))
+```
+
+To explore features of the data:
+
+```{r, eval = FALSE}
+str(weight.training)
+summary(weight.training)
+```
+
+There are many N/A's in the dataset. Thus we look more closely to see how many variables contian a significant number of N/A's missing with:
+
+```{r, eval = FALSE}
+colSums(!is.na(weight.training))
+```
+
+Upon closer examination it appears these variables are not essential to the raw data but rather averages, minimums, and maximums of the raw data. They also contain a large number of N/A's. Therefore we can get rid of them with:
+
+```{r}
+wt.compact <- weight.training[,colSums(is.na(weight.training)) < 0.5*nrow(weight.training)]
+```
+
+Furthermore, we can see that there are a few columns at the beginning related to timestamping the datapoints, which cannot possibly have any help in predicting what type of movement the wearer is performing. Thus we get rid of them with:
+
+```{r}
+wt.compact <- wt.compact[,8:60]
+```
+
+Now we can begin looking at which variables might have a strong correlation with each other in order to reduce the dimensions of our dataset a bit more using:
+
+```{r, message = FALSE}
+set.seed(5)
+library(caret)
+wt.cor <- cor(wt.compact[,1:52])
+wt.high.cor <- findCorrelation(wt.cor, cutoff = 0.75)
+sort.hc <- sort(wt.high.cor)
+wt.reduced <- wt.compact[,-c(sort.hc)]
+```
+
+
+##Model Building  
+
+Now we partition the data:
+
+```{r}
+inTrain <- createDataPartition(wt.reduced$classe, p = 0.75, list = FALSE)
+training <- wt.reduced[inTrain, ]
+testing <- wt.reduced[-inTrain, ]
+```
+
+Then we set a model to fit the data. Here we will use random forets due to large and most likely non-linear model needed to fit the data. Furthermore, random forests have cross-validation built into them so that no k-fold cross validation is needed.
+
+```{r, message = FALSE}
+library(randomForest)
+modelFit <- randomForest(classe~., data = training)
+modelFit
+```
+
+Finally we test it on the testing set we partitioned earlier and look at a plot of the error vs number of trees:
+
+```{r}
+confusionMatrix(testing$classe, predict(modelFit, newdata = testing))
+plot(modelFit, main = "Visualizing Model Construction")
+```
+
+It appears we could have used a much smaller number of trees, however with a resubstitution error of 0.6% and an out of sample error of 0.61%, it bodes well that the out of sample error for the final testing set will be around 0.61% if not a little greator.
+
+
+
